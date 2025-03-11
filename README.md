@@ -23,7 +23,7 @@ If you find this work useful in your research, consider citing:
 @article{olsson2025certifiably,
     author    = {Olsson, Carl and Lochman, Yaroslava and Malmport, Johan and Zach, Christopher},
     title     = {Certifiably Optimal Anisotropic Rotation Averaging},
-    journal   = {arXiv preprint},
+    journal   = {arXiv preprint arXiv:2503.07353},
     year      = {2025},
 }
 ```
