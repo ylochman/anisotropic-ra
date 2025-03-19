@@ -1,11 +1,19 @@
 using LinearAlgebra, Statistics
 using JuMP, SCS
 
-function run_rotation_averaging(Rrel, H; anisotropic_cost=true, cSO3_constraints=true, max_iters=500_000, eps_abs=1.0e-5, eps_rel=1.0e-6, eps_infeas=1.0e-8)
-    """
+function run_rotation_averaging_SDP(Rrel, H; anisotropic_cost=true, cSO3_constraints=true, max_iters=500_000, eps_abs=1.0e-5, eps_rel=1.0e-6, eps_infeas=1.0e-8)
+    """ Solve anisotropic/isotropic rotation averaging with an SDP solver. 4 possible problems (using paper's notation) are:
+
+                            anisotropic_cost
+                            true            false
+        cSO3_constraints  + --------------------------------
+                    true  | SDP-cSO(3)      SDP-cSO(3)-ɪꜱᴏ
+                    false | SDP-O(3)-Aɴɪꜱᴏ  SDP-O(3)-ɪꜱᴏ
     Args:
         Rrel -- 3Nx3N matrix of relative rotations (unobserved blocks are expected to be all zeros)
         H -- 3Nx3N matrix of Hessians
+        anisotropic_cost/cSO3_constraints -- see above
+        max_iters, eps_abs, eps_rel, eps_infeas -- solver's hyperparameters
     Returns:
         R_est -- Nx3x3 matrix of estimated absolute rotations extracted from the solution
         stat -- status of optimization
@@ -36,7 +44,7 @@ function run_rotation_averaging(Rrel, H; anisotropic_cost=true, cSO3_constraints
         for i=1:N
             for j=i+1:N
                 i0 = 3*(i-1); j0 = 3*(j-1)
-                if sqrt(sum(Rrel[i0+1:i0+3, j0+1:j0+3].^2)/9) > 1e-7
+                if sum(Rrel[i0+1:i0+3, j0+1:j0+3].^2) > 0
                     Yk = @variable(model, [1:4,1:4], PSD)
 
                     @constraint(model, 1 - X[i0+1,j0+1] - X[i0+2,j0+2] + X[i0+3,j0+3] - Yk[1,1] == 0)
@@ -93,34 +101,36 @@ function construct_cost_matrix(Rrel, H; anisotropic=true, rescale_hessians=true)
     K = N*(N-1) ÷ 2 # number of relative rotations
     I3x3 = [1.0  0  0; 0  1.0  0; 0  0  1.0]
 
-    # Collect eigenvalues of all Hessians for re-scaling
     H_eigvals = zeros(K,3)
-    k = 1
-    for i=1:N
-        for j=i+1:N
-            ii, jj = 3*i-2:3*i, 3*j-2:3*j
-            if sqrt(sum(Rrel[ii, jj].^2)/9) > 1e-7
-                H_eigvals[k,:] .= eigvals(H[ii, jj])
-                k += 1
+    if anisotropic
+        # Collect eigenvalues of all Hessians for re-scaling
+        k = 1
+        for i=1:N
+            for j=i+1:N
+                ii, jj = 3*i-2:3*i, 3*j-2:3*j
+                if sum(Rrel[ii, jj].^2) > 0
+                    H_eigvals[k,:] .= real.(eigvals(H[ii, jj]))
+                    k += 1
+                end
             end
         end
+        K_observed = k-1
+        H_eigvals = H_eigvals[1:K_observed,:]
     end
-    K_observed = k-1
-    H_eigvals = H_eigvals[1:K_observed,:]
 
     # Make isotropic/anisotropic cost matrix
     cost_matrix = zeros(3*N, 3*N)
     for i=1:N
         for j=i+1:N
             ii, jj = 3*i-2:3*i, 3*j-2:3*j
-            Rrel_ij = Rrel[ii, jj]
-            if sqrt(sum(Rrel_ij.^2)/9) > 1e-7
-                H_ij = H[ii, jj]
-                if rescale_hessians
-                    H_ij ./= mean(maximum(H_eigvals, dims=2))
+            if sum(Rrel[ii, jj].^2) > 0
+                if anisotropic
+                    H_ij = H[ii, jj] / (rescale_hessians ? mean(maximum(H_eigvals, dims=2)) : 1)
+                    M_ij = tr(H_ij) / 2 * I3x3 - H_ij
+                    cost_matrix[ii, jj] .= (M_ij * Rrel[ii, jj])'
+                else
+                    cost_matrix[ii, jj] .= Rrel[ii, jj]'
                 end
-                M_ij = tr(H_ij) / 2 * I3x3 - H_ij
-                cost_matrix[ii, jj] .= anisotropic ? (M_ij * Rrel_ij)' : Rrel_ij'
             end
         end
     end

@@ -14,7 +14,7 @@ end
 function project_on_SO3(M)
     U, _, V = svd(M)
     R = U * V'
-    if sign(det(R)) < 0
+    if det(R) < 0
         R .= U * Diagonal([1,1,-1]) * V'
     end
     return R
@@ -37,4 +37,8 @@ end
 
 function rms(diff)
     return sqrt(mean((diff[:]).^2))
+end
+
+function normalize(x, p::Real=2)
+    return x ./ (sum(x.^p)).^(1/p)
 end
