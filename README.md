@@ -12,7 +12,7 @@ The code is tested on Julia 1.11.3. The required packages can be installed using
 ## Running the code
 The main code for the solver is in [`anisotropic_ra.jl`](./anisotropic_ra/anisotropic_ra.jl).
 
-An example of running it is in [`test_ra.jl`](./anisotropic_ra/test_ra.jl).
+An example of running it is in [`demo.jl`](./demos/demo.jl).
 
 ## Solver details
 The SDP program is implemented using the [conic splitting solver](https://arxiv.org/abs/1312.3039) with the [JuMP](https://jump.dev/JuMP.jl) wrapper in Julia. 
