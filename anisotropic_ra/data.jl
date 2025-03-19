@@ -1,4 +1,4 @@
-using Random, LinearAlgebra
+using Random, LinearAlgebra, MAT
 
 include("helpers.jl")
 
@@ -58,4 +58,32 @@ function generate_data(N, p; min_H_eigval=10, max_H_eigval=100)
     end
 
     return R, Rrel, H
+end
+
+function read_matlab_data(matfile)
+    data = matread(matfile)
+    N = data["Rgt"].size[1] ÷ 3 # number of cameras/poses
+    I3x3 = [1.0  0  0; 0  1.0  0; 0  0  1.0]
+    
+    # Absolute rotations
+    R_true = zeros(N, 3, 3)
+    for i=1:N
+        R_true[i,:,:] = data["Rgt"][3*(i-1)+1:3*(i-1)+3,:]
+    end
+
+    # Hessians (extracted from matrices M_{ij})
+    H = zeros(3*N, 3*N)
+    for i=1:N
+        for j=i+1:N
+            i0 = 3*(i-1); j0 = 3*(j-1)
+            Rrel_ij = data["Rrel"][i0+1:i0+3, j0+1:j0+3]
+            if sum(Rrel_ij.^2) > 0
+                Mij = data["Alpha"][i0+1:i0+3, j0+1:j0+3]
+                Hij = tr(Mij) * I3x3 - Mij
+                H[i0+1:i0+3, j0+1:j0+3] = Hij
+            end
+        end
+    end
+
+    return R_true, data["Rrel"], H
 end
